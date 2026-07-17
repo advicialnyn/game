@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simon // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>1P</div>
+</div>
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span>ROUND <span class="lcd" id="round">0</span></span>
+      <span>BEST <span class="lcd" id="best">0</span></span>
+    </div>
+    <div class="simon-pad">
+      <div class="simon-btn c-green" data-i="0"></div>
+      <div class="simon-btn c-red" data-i="1"></div>
+      <div class="simon-btn c-amber" data-i="2"></div>
+      <div class="simon-btn c-blue" data-i="3"></div>
+    </div>
+    <button class="btn" id="start">▶ Start</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">SYSTEM</div>
+    <h2 id="overlayTitle">WRONG SEQUENCE</h2>
+    <p id="overlaySubtitle">Round 0</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const btns = [...document.querySelectorAll('.simon-btn')];
+  const roundEl = document.getElementById('round');
+  const bestEl = document.getElementById('best');
+  let sequence, playerPos, round, best, accepting;
+
+  best = parseInt(localStorage.getItem('simonBest') || '0');
+  bestEl.textContent = best;
+
+  function init(){
+    sequence = [];
+    round = 0;
+    roundEl.textContent = 0;
+    accepting = false;
+    nextRound();
+  }
+
+  function nextRound(){
+    sequence.push(Math.floor(Math.random()*4));
+    round++;
+    roundEl.textContent = round;
+    playerPos = 0;
+    accepting = false;
+    playSequence();
+  }
+
+  async function flash(i, dur=400){
+    btns[i].classList.add('active');
+    await new Promise(r => setTimeout(r, dur));
+    btns[i].classList.remove('active');
+    await new Promise(r => setTimeout(r, 120));
+  }
+
+  async function playSequence(){
+    await new Promise(r => setTimeout(r, 500));
+    for (const i of sequence) await flash(i);
+    accepting = true;
+  }
+
+  function handlePress(i){
+    if (!accepting) return;
+    flash(i, 200);
+    if (sequence[playerPos] !== i) {
+      accepting = false;
+      if (round-1 > best) { best = round-1; localStorage.setItem('simonBest', best); bestEl.textContent = best; }
+      showOverlay('SYSTEM', 'WRONG SEQUENCE', `You reached round ${round}.`, init, false);
+      return;
+    }
+    playerPos++;
+    if (playerPos === sequence.length) {
+      accepting = false;
+      setTimeout(nextRound, 700);
+    }
+  }
+
+  btns.forEach(b => b.addEventListener('click', () => handlePress(parseInt(b.dataset.i))));
+  document.getElementById('start').addEventListener('click', init);
+})();
+</script>
+</body>
+</html>

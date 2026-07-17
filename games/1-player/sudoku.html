@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+.sudoku-cell { border-right: 1px solid var(--trace-dim); border-bottom: 1px solid var(--trace-dim); }
+.sudoku-cell.b-right { border-right: 2px solid var(--trace); }
+.sudoku-cell.b-bottom { border-bottom: 2px solid var(--trace); }
+</style>
+</head>
+<body>
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>1P</div>
+</div>
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span>MISTAKES <span class="lcd" id="mistakes">0</span>/3</span>
+      <span>TIME <span class="lcd" id="timer">00:00</span></span>
+    </div>
+    <div class="sudoku-grid" id="grid"></div>
+    <div class="pad-grid" id="pad"></div>
+    <button class="btn" id="restart">↺ New Puzzle</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">COMPLETE</div>
+    <h2 id="overlayTitle">SOLVED</h2>
+    <p id="overlaySubtitle">Time 00:00</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const gridEl = document.getElementById('grid');
+  const padEl = document.getElementById('pad');
+  const mistakesEl = document.getElementById('mistakes');
+  const timerEl = document.getElementById('timer');
+  let solution, puzzle, given, entries, selected, mistakes, seconds, timerInt;
+
+  function makeSolvedGrid(){
+    const g = Array(9).fill().map(()=>Array(9).fill(0));
+    function valid(r,c,v){
+      for (let i=0;i<9;i++) if (g[r][i]===v || g[i][c]===v) return false;
+      const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+      for (let i=0;i<3;i++) for (let j=0;j<3;j++) if (g[br+i][bc+j]===v) return false;
+      return true;
+    }
+    function fill(pos){
+      if (pos===81) return true;
+      const r=Math.floor(pos/9), c=pos%9;
+      const nums=[1,2,3,4,5,6,7,8,9].sort(()=>Math.random()-0.5);
+      for (const v of nums) {
+        if (valid(r,c,v)) {
+          g[r][c]=v;
+          if (fill(pos+1)) return true;
+          g[r][c]=0;
+        }
+      }
+      return false;
+    }
+    fill(0);
+    return g;
+  }
+
+  function makePuzzle(solved){
+    const p = solved.map(r=>r.slice());
+    let holes = 42; // difficulty
+    while (holes > 0) {
+      const r = Math.floor(Math.random()*9), c = Math.floor(Math.random()*9);
+      if (p[r][c] !== 0) { p[r][c] = 0; holes--; }
+    }
+    return p;
+  }
+
+  function init(){
+    solution = makeSolvedGrid();
+    puzzle = makePuzzle(solution);
+    given = puzzle.map(r => r.map(v => v !== 0));
+    entries = puzzle.map(r => r.slice());
+    selected = null;
+    mistakes = 0;
+    seconds = 0;
+    mistakesEl.textContent = 0;
+    clearInterval(timerInt);
+    timerInt = setInterval(() => {
+      seconds++;
+      const m = String(Math.floor(seconds/60)).padStart(2,'0');
+      const s = String(seconds%60).padStart(2,'0');
+      timerEl.textContent = `${m}:${s}`;
+    }, 1000);
+    renderGrid();
+    renderPad();
+  }
+
+  function renderGrid(){
+    gridEl.innerHTML = '';
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      const cell = document.createElement('div');
+      cell.className = 'sudoku-cell';
+      if (c===2||c===5) cell.classList.add('b-right');
+      if (r===2||r===5) cell.classList.add('b-bottom');
+      if (given[r][c]) cell.classList.add('given');
+      if (selected && selected[0]===r && selected[1]===c) cell.classList.add('selected');
+      const v = entries[r][c];
+      cell.textContent = v || '';
+      if (v && !given[r][c] && v !== solution[r][c]) cell.classList.add('err');
+      cell.addEventListener('click', () => { selected = [r,c]; renderGrid(); });
+      gridEl.appendChild(cell);
+    }
+  }
+
+  function renderPad(){
+    padEl.innerHTML = '';
+    for (let n=1;n<=9;n++) {
+      const b = document.createElement('button');
+      b.textContent = n;
+      b.addEventListener('click', () => placeNumber(n));
+      padEl.appendChild(b);
+    }
+    const clear = document.createElement('button');
+    clear.textContent = '⌫';
+    clear.addEventListener('click', () => placeNumber(0));
+    padEl.appendChild(clear);
+  }
+
+  function placeNumber(n){
+    if (!selected) return;
+    const [r,c] = selected;
+    if (given[r][c]) return;
+    entries[r][c] = n;
+    if (n && n !== solution[r][c]) {
+      mistakes++;
+      mistakesEl.textContent = mistakes;
+      if (mistakes >= 3) {
+        clearInterval(timerInt);
+        showOverlay('SYSTEM', 'TOO MANY MISTAKES', `You reached 3 mistakes.`, init, false);
+        return;
+      }
+    }
+    renderGrid();
+    checkComplete();
+  }
+
+  function checkComplete(){
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) if (entries[r][c] !== solution[r][c]) return;
+    clearInterval(timerInt);
+    showOverlay('COMPLETE', 'SOLVED', `Time ${timerEl.textContent} · Mistakes ${mistakes}`, init, true);
+  }
+
+  document.getElementById('restart').addEventListener('click', init);
+  init();
+})();
+</script>
+</body>
+</html>

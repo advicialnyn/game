@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Match // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>1P</div>
+</div>
+
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span>MOVES <span class="lcd" id="memMoves">0</span></span>
+      <span>MATCH <span class="lcd" id="memMatches">0</span>/8</span>
+    </div>
+    <div class="mem-board" id="memBoard"></div>
+    <button class="btn" id="memReset">↺ New Game</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">COMPLETE</div>
+    <h2 id="overlayTitle">ALL MATCHED</h2>
+    <p id="overlaySubtitle">Finished</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const boardEl = document.getElementById('memBoard');
+  const movesEl = document.getElementById('memMoves');
+  const matchesEl = document.getElementById('memMatches');
+  const emojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'];
+  let cards, flipped, matched, moves, lock;
+
+  function init(){
+    cards = [...emojis, ...emojis]
+      .map(e => ({ emoji: e, id: Math.random() }))
+      .sort(() => Math.random() - 0.5);
+    flipped = [];
+    matched = 0;
+    moves = 0;
+    lock = false;
+    movesEl.textContent = moves;
+    matchesEl.textContent = matched;
+    render();
+  }
+
+  function render(wrongIdx){
+    boardEl.innerHTML = '';
+    cards.forEach((card, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'mem-cell';
+      if (card.matched) cell.classList.add('matched');
+      if (flipped.includes(i)) cell.classList.add('flipped');
+      if (wrongIdx && wrongIdx.includes(i)) cell.classList.add('wrong');
+      cell.textContent = (card.matched || flipped.includes(i)) ? card.emoji : '';
+      cell.addEventListener('click', () => handleFlip(i));
+      boardEl.appendChild(cell);
+    });
+  }
+
+  function handleFlip(i){
+    if (lock || flipped.includes(i) || cards[i].matched) return;
+    flipped.push(i);
+    render();
+    if (flipped.length === 2) {
+      moves++;
+      movesEl.textContent = moves;
+      lock = true;
+      const [a, b] = flipped;
+      if (cards[a].emoji === cards[b].emoji) {
+        cards[a].matched = true;
+        cards[b].matched = true;
+        matched++;
+        matchesEl.textContent = matched;
+        flipped = [];
+        lock = false;
+        render();
+        if (matched === emojis.length) {
+          setTimeout(() => showOverlay('COMPLETE', 'ALL MATCHED', `Finished in ${moves} moves.`, init, true), 300);
+        }
+      } else {
+        setTimeout(() => {
+          render([a, b]);
+          setTimeout(() => {
+            flipped = [];
+            lock = false;
+            render();
+          }, 300);
+        }, 500);
+      }
+    }
+  }
+
+  document.getElementById('memReset').addEventListener('click', init);
+  init();
+})();
+</script>
+
+</body>
+</html>
