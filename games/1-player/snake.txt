@@ -102,9 +102,15 @@
   function tick(){
     if (!running) return;
     direction = nextDirection;
-    const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+    let head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
 
-    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= cols || snake.some(s => s.x === head.x && s.y === head.y)) {
+    // wrap around edges instead of dying on the wall
+    if (head.x < 0) head.x = cols - 1;
+    if (head.x >= cols) head.x = 0;
+    if (head.y < 0) head.y = cols - 1;
+    if (head.y >= cols) head.y = 0;
+
+    if (snake.some(s => s.x === head.x && s.y === head.y)) {
       running = false;
       clearInterval(loop);
       let newBest = false;
