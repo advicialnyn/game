@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Race // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>3-4P</div>
+</div>
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div id="setup">
+      <p style="font-family:var(--font-mono);font-size:0.8em;color:var(--text-dim);margin-bottom:10px;">HOW MANY PLAYERS?</p>
+      <div class="player-select-row">
+        <button class="btn" data-n="2">2</button>
+        <button class="btn" data-n="3">3</button>
+        <button class="btn" data-n="4">4</button>
+      </div>
+    </div>
+
+    <div id="game" style="display:none;">
+      <div class="info-bar">
+        <span class="turn-badge" id="turnBadge">P1's TURN</span>
+        <span>LAP TARGET <span class="lcd" id="target">30</span></span>
+      </div>
+      <div class="race-track" id="track"></div>
+      <div class="dice-box">
+        <div class="dice-face" id="diceFace">?</div>
+        <button class="btn" id="rollBtn">🎲 Roll Dice</button>
+      </div>
+      <button class="btn" id="restart">↺ Restart</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">MATCH RESULT</div>
+    <h2 id="overlayTitle">P1 WINS</h2>
+    <p id="overlaySubtitle"></p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const TRACK_LEN = 30; // cells 0..29, finish at 30
+  const trackEl = document.getElementById('track');
+  const turnBadgeEl = document.getElementById('turnBadge');
+  const diceFaceEl = document.getElementById('diceFace');
+  const targetEl = document.getElementById('target');
+  targetEl.textContent = TRACK_LEN;
+
+  let numPlayers, positions, turn, rolling;
+  const colors = ['token-p1','token-p2','token-p3','token-p4'];
+  const names = ['P1','P2','P3','P4'];
+
+  document.querySelectorAll('#setup button').forEach(b => {
+    b.addEventListener('click', () => startGame(parseInt(b.dataset.n)));
+  });
+
+  function startGame(n){
+    numPlayers = n;
+    positions = Array(n).fill(0);
+    turn = 0;
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    updateBadge();
+    renderTrack();
+  }
+
+  function updateBadge(){
+    turnBadgeEl.textContent = `${names[turn]}'S TURN`;
+  }
+
+  function renderTrack(){
+    trackEl.innerHTML = '';
+    for (let i=0;i<=TRACK_LEN;i++) {
+      const cell = document.createElement('div');
+      cell.className = 'race-cell';
+      if (i === TRACK_LEN) cell.classList.add('finish');
+      for (let p=0;p<numPlayers;p++) {
+        if (positions[p] === i) {
+          const tok = document.createElement('div');
+          tok.className = 'race-token ' + colors[p];
+          cell.appendChild(tok);
+        }
+      }
+      if (i===0 || i===TRACK_LEN) {
+        const lbl = document.createElement('span');
+        lbl.textContent = i===0 ? 'S' : 'F';
+        cell.appendChild(lbl);
+      }
+      trackEl.appendChild(cell);
+    }
+  }
+
+  function roll(){
+    if (rolling) return;
+    rolling = true;
+    let count = 0;
+    const spin = setInterval(() => {
+      diceFaceEl.textContent = 1 + Math.floor(Math.random()*6);
+      count++;
+      if (count > 8) {
+        clearInterval(spin);
+        const value = 1 + Math.floor(Math.random()*6);
+        diceFaceEl.textContent = value;
+        movePlayer(value);
+      }
+    }, 60);
+  }
+
+  function movePlayer(value){
+    let newPos = positions[turn] + value;
+    if (newPos > TRACK_LEN) newPos = TRACK_LEN - (newPos - TRACK_LEN); // bounce back off the finish
+    positions[turn] = newPos;
+    renderTrack();
+    if (newPos === TRACK_LEN) {
+      showOverlay('MATCH RESULT', `${names[turn]} WINS`, `Reached the finish line first!`, resetToSetup, true);
+      rolling = false;
+      return;
+    }
+    turn = (turn + 1) % numPlayers;
+    updateBadge();
+    rolling = false;
+  }
+
+  function resetToSetup(){
+    document.getElementById('game').style.display = 'none';
+    document.getElementById('setup').style.display = 'block';
+  }
+
+  document.getElementById('rollBtn').addEventListener('click', roll);
+  document.getElementById('restart').addEventListener('click', resetToSetup);
+})();
+</script>
+</body>
+</html>
