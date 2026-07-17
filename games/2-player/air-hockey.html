@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Air Hockey // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  #hockeyCanvas { touch-action: none; }
+</style>
+</head>
+<body>
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>2P</div>
+</div>
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span>P1 (bottom) <span class="lcd" id="p1Score">0</span></span>
+      <span>P2 (top) <span class="lcd" id="p2Score">0</span></span>
+    </div>
+    <canvas id="hockeyCanvas" width="300" height="450"></canvas>
+    <button class="btn" id="restart">↺ Reset</button>
+    <p style="font-family:var(--font-mono);font-size:0.7em;color:var(--text-dim);margin-top:10px;">drag your paddle — P1 controls bottom half, P2 controls top half. First to 7 wins.</p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">MATCH RESULT</div>
+    <h2 id="overlayTitle">PLAYER 1 WINS</h2>
+    <p id="overlaySubtitle"></p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('hockeyCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const p1El = document.getElementById('p1Score');
+  const p2El = document.getElementById('p2Score');
+  const PADDLE_R = 24, PUCK_R = 10, WIN_SCORE = 7;
+
+  let p1, p2, puck, scores, running, rafId;
+
+  function resetPositions(){
+    p1 = { x: W/2, y: H - 50 };
+    p2 = { x: W/2, y: 50 };
+    puck = { x: W/2, y: H/2, vx: (Math.random()>0.5?1:-1)*3, vy: (Math.random()>0.5?1:-1)*3 };
+  }
+
+  function init(){
+    scores = {1:0, 2:0};
+    p1El.textContent = 0;
+    p2El.textContent = 0;
+    resetPositions();
+    running = true;
+    cancelAnimationFrame(rafId);
+    loop();
+  }
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function draw(){
+    ctx.fillStyle = '#081310';
+    ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle = '#1f3d34';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W/2, H/2, 40, 0, Math.PI*2); ctx.stroke();
+    // goals
+    ctx.strokeStyle = '#3dffa0';
+    ctx.beginPath(); ctx.moveTo(W/2-40, 0); ctx.lineTo(W/2+40, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W/2-40, H); ctx.lineTo(W/2+40, H); ctx.stroke();
+
+    // paddles
+    ctx.fillStyle = '#ffb020';
+    ctx.shadowColor = '#ffb020'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(p1.x, p1.y, PADDLE_R, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#3dffa0';
+    ctx.shadowColor = '#3dffa0';
+    ctx.beginPath(); ctx.arc(p2.x, p2.y, PADDLE_R, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // puck
+    ctx.fillStyle = '#d3ece1';
+    ctx.beginPath(); ctx.arc(puck.x, puck.y, PUCK_R, 0, Math.PI*2); ctx.fill();
+  }
+
+  function collide(paddle){
+    const dx = puck.x - paddle.x, dy = puck.y - paddle.y;
+    const dist = Math.hypot(dx,dy);
+    const minDist = PADDLE_R + PUCK_R;
+    if (dist < minDist) {
+      const angle = Math.atan2(dy,dx);
+      puck.x = paddle.x + Math.cos(angle)*minDist;
+      puck.y = paddle.y + Math.sin(angle)*minDist;
+      const speed = Math.hypot(puck.vx, puck.vy) || 3;
+      puck.vx = Math.cos(angle) * (speed+1);
+      puck.vy = Math.sin(angle) * (speed+1);
+    }
+  }
+
+  function step(){
+    puck.x += puck.vx;
+    puck.y += puck.vy;
+    if (puck.x - PUCK_R < 0) { puck.x = PUCK_R; puck.vx *= -1; }
+    if (puck.x + PUCK_R > W) { puck.x = W-PUCK_R; puck.vx *= -1; }
+
+    const inGoalX = puck.x > W/2-40 && puck.x < W/2+40;
+    if (puck.y - PUCK_R < 0) {
+      if (inGoalX) { score(1); return; }
+      puck.y = PUCK_R; puck.vy *= -1;
+    }
+    if (puck.y + PUCK_R > H) {
+      if (inGoalX) { score(2); return; }
+      puck.y = H-PUCK_R; puck.vy *= -1;
+    }
+    puck.vx *= 0.999; puck.vy *= 0.999;
+    collide(p1); collide(p2);
+  }
+
+  function score(player){
+    scores[player]++;
+    p1El.textContent = scores[1];
+    p2El.textContent = scores[2];
+    if (scores[player] >= WIN_SCORE) {
+      running = false;
+      showOverlay('MATCH RESULT', `PLAYER ${player} WINS`, `Final score P1 ${scores[1]} · P2 ${scores[2]}`, init, true);
+      return;
+    }
+    resetPositions();
+  }
+
+  function loop(){
+    if (running) step();
+    draw();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function getPos(e, touchId){
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width, scaleY = H / rect.height;
+    let clientX, clientY;
+    if (e.touches) {
+      const t = touchId !== null ? [...e.touches].find(t => t.identifier === touchId) : e.touches[0];
+      if (!t) return null;
+      clientX = t.clientX; clientY = t.clientY;
+    } else {
+      clientX = e.clientX; clientY = e.clientY;
+    }
+    return { x: (clientX-rect.left)*scaleX, y: (clientY-rect.top)*scaleY };
+  }
+
+  let p1Touch = null, p2Touch = null;
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const pos = getPos(e, t.identifier);
+      if (!pos) continue;
+      if (pos.y > H/2 && p1Touch===null) p1Touch = t.identifier;
+      else if (pos.y <= H/2 && p2Touch===null) p2Touch = t.identifier;
+    }
+  }, {passive:false});
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.touches) {
+      if (t.identifier === p1Touch) {
+        const pos = getPos(e, p1Touch);
+        if (pos) { p1.x = clamp(pos.x, PADDLE_R, W-PADDLE_R); p1.y = clamp(pos.y, H/2+PADDLE_R, H-PADDLE_R); }
+      }
+      if (t.identifier === p2Touch) {
+        const pos = getPos(e, p2Touch);
+        if (pos) { p2.x = clamp(pos.x, PADDLE_R, W-PADDLE_R); p2.y = clamp(pos.y, PADDLE_R, H/2-PADDLE_R); }
+      }
+    }
+  }, {passive:false});
+  canvas.addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === p1Touch) p1Touch = null;
+      if (t.identifier === p2Touch) p2Touch = null;
+    }
+  });
+
+  // mouse fallback (desktop testing)
+  let mouseDown = false;
+  canvas.addEventListener('mousedown', () => mouseDown = true);
+  window.addEventListener('mouseup', () => mouseDown = false);
+  canvas.addEventListener('mousemove', (e) => {
+    if (!mouseDown) return;
+    const pos = getPos(e, null);
+    if (pos.y > H/2) { p1.x = clamp(pos.x, PADDLE_R, W-PADDLE_R); p1.y = clamp(pos.y, H/2+PADDLE_R, H-PADDLE_R); }
+    else { p2.x = clamp(pos.x, PADDLE_R, W-PADDLE_R); p2.y = clamp(pos.y, PADDLE_R, H/2-PADDLE_R); }
+  });
+
+  document.getElementById('restart').addEventListener('click', init);
+  resetPositions();
+  running = false;
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battleship // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>2P</div>
+</div>
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span id="status">SETUP: PLAYER 1</span>
+      <span id="shipInfo">Ships left: 3</span>
+    </div>
+    <div id="gameArea"></div>
+    <button class="btn" id="restart">↺ Restart</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">PASS DEVICE</div>
+    <h2 id="overlayTitle">PLAYER 2'S TURN</h2>
+    <p id="overlaySubtitle">Hand the phone over, then continue.</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const SIZE = 6;
+  const SHIPS = [3,2,2]; // lengths
+  const statusEl = document.getElementById('status');
+  const shipInfoEl = document.getElementById('shipInfo');
+  const areaEl = document.getElementById('gameArea');
+
+  let boards, phase, setupPlayer, setupShipIdx, setupOrientation, turn, pendingReveal;
+
+  function emptyBoard(){
+    return Array(SIZE).fill().map(()=>Array(SIZE).fill().map(()=>({ship:false, hit:false})));
+  }
+
+  function init(){
+    boards = { 1: emptyBoard(), 2: emptyBoard() };
+    phase = 'setup';
+    setupPlayer = 1;
+    setupShipIdx = 0;
+    setupOrientation = 'h';
+    turn = 1;
+    pendingReveal = null;
+    hideOverlay();
+    renderSetup();
+  }
+
+  function canPlace(board, r, c, len, orient){
+    for (let i=0;i<len;i++) {
+      const rr = orient==='h' ? r : r+i;
+      const cc = orient==='h' ? c+i : c;
+      if (rr>=SIZE||cc>=SIZE) return false;
+      if (board[rr][cc].ship) return false;
+    }
+    return true;
+  }
+
+  function placeShip(board, r, c, len, orient){
+    for (let i=0;i<len;i++) {
+      const rr = orient==='h' ? r : r+i;
+      const cc = orient==='h' ? c+i : c;
+      board[rr][cc].ship = true;
+    }
+  }
+
+  function renderSetup(){
+    statusEl.textContent = `SETUP: PLAYER ${setupPlayer}`;
+    const len = SHIPS[setupShipIdx];
+    shipInfoEl.textContent = `Placing ship ${setupShipIdx+1}/${SHIPS.length} (len ${len})`;
+    areaEl.innerHTML = '';
+
+    const rotateBtn = document.createElement('button');
+    rotateBtn.className = 'btn';
+    rotateBtn.textContent = `↻ Orientation: ${setupOrientation==='h'?'Horizontal':'Vertical'}`;
+    rotateBtn.style.marginBottom = '10px';
+    rotateBtn.addEventListener('click', () => { setupOrientation = setupOrientation==='h'?'v':'h'; renderSetup(); });
+    areaEl.appendChild(rotateBtn);
+
+    const grid = document.createElement('div');
+    grid.className = 'bs-grid';
+    const board = boards[setupPlayer];
+    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
+      const cell = document.createElement('div');
+      cell.className = 'bs-cell';
+      if (board[r][c].ship) cell.classList.add('ship');
+      cell.addEventListener('click', () => {
+        if (!canPlace(board, r, c, len, setupOrientation)) return;
+        placeShip(board, r, c, len, setupOrientation);
+        setupShipIdx++;
+        if (setupShipIdx >= SHIPS.length) {
+          if (setupPlayer === 1) {
+            setupPlayer = 2;
+            setupShipIdx = 0;
+            showOverlay('PASS DEVICE', "PLAYER 2'S SETUP", 'Hand the phone to Player 2, then continue.', renderSetup, false);
+          } else {
+            phase = 'battle';
+            turn = 1;
+            showOverlay('PASS DEVICE', "PLAYER 1'S TURN", 'Setup complete. Hand the phone to Player 1.', renderBattle, false);
+          }
+        } else {
+          renderSetup();
+        }
+      });
+      grid.appendChild(cell);
+    }
+    areaEl.appendChild(grid);
+  }
+
+  function renderBattle(){
+    statusEl.textContent = `PLAYER ${turn}'S TURN`;
+    const targetPlayer = turn === 1 ? 2 : 1;
+    const targetBoard = boards[targetPlayer];
+    const remaining = targetBoard.flat().filter(c => c.ship && !c.hit).length;
+    shipInfoEl.textContent = `Enemy cells remaining: ${remaining}`;
+    areaEl.innerHTML = '';
+
+    const label = document.createElement('div');
+    label.className = 'bs-label';
+    label.textContent = `Fire at Player ${targetPlayer}'s grid`;
+    areaEl.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'bs-grid';
+    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
+      const cell = document.createElement('div');
+      cell.className = 'bs-cell';
+      const data = targetBoard[r][c];
+      if (data.hit) cell.classList.add(data.ship ? 'hit' : 'miss');
+      cell.addEventListener('click', () => fire(r,c));
+      grid.appendChild(cell);
+    }
+    areaEl.appendChild(grid);
+  }
+
+  function fire(r,c){
+    const targetPlayer = turn === 1 ? 2 : 1;
+    const targetBoard = boards[targetPlayer];
+    const data = targetBoard[r][c];
+    if (data.hit) return;
+    data.hit = true;
+    const remaining = targetBoard.flat().filter(c => c.ship && !c.hit).length;
+    if (remaining === 0) {
+      showOverlay('MATCH RESULT', `PLAYER ${turn} WINS`, `All of Player ${targetPlayer}'s ships sunk.`, init, true);
+      return;
+    }
+    const hitMsg = data.ship ? 'HIT!' : 'Miss.';
+    turn = targetPlayer;
+    showOverlay('PASS DEVICE', hitMsg, `Hand the phone to Player ${turn}, then continue.`, renderBattle, false);
+  }
+
+  document.getElementById('restart').addEventListener('click', init);
+  init();
+})();
+</script>
+</body>
+</html>

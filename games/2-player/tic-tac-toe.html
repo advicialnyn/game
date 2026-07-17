@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tic-Tac-Toe // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>2P</div>
+</div>
+
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span id="tttStatus">PLAYER X TURN</span>
+      <span>X <span class="lcd" id="tttScoreX">0</span> &nbsp;·&nbsp; O <span class="lcd" id="tttScoreO">0</span></span>
+    </div>
+    <div class="ttt-board" id="tttBoard"></div>
+    <button class="btn" id="tttReset">↺ Reset</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">MATCH RESULT</div>
+    <h2 id="overlayTitle">PLAYER X WINS</h2>
+    <p id="overlaySubtitle">X 0 · O 0</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const boardEl = document.getElementById('tttBoard');
+  const statusEl = document.getElementById('tttStatus');
+  const scoreXEl = document.getElementById('tttScoreX');
+  const scoreOEl = document.getElementById('tttScoreO');
+  let board, current, active, scores = {X: 0, O: 0};
+
+  function init(fullReset){
+    board = Array(9).fill(null);
+    current = 'X';
+    active = true;
+    if (fullReset) { scores = {X: 0, O: 0}; }
+    scoreXEl.textContent = scores.X;
+    scoreOEl.textContent = scores.O;
+    statusEl.textContent = `PLAYER ${current} TURN`;
+    render([]);
+  }
+
+  function render(winCells, newIdx){
+    boardEl.innerHTML = '';
+    board.forEach((val, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'ttt-cell';
+      if (winCells.includes(i)) cell.classList.add('win-line');
+      if (i === newIdx) cell.classList.add('pop');
+      cell.textContent = val || '';
+      cell.addEventListener('click', () => handleMove(i));
+      boardEl.appendChild(cell);
+    });
+  }
+
+  const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+  function checkWinner(){
+    for (const line of wins) {
+      const [a,b,c] = line;
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) return {winner: board[a], line};
+    }
+    if (board.every(x => x)) return {winner: 'draw', line: []};
+    return null;
+  }
+
+  function handleMove(i){
+    if (!active || board[i]) return;
+    board[i] = current;
+    const result = checkWinner();
+    if (result) {
+      active = false;
+      render(result.line, i);
+      if (result.winner === 'draw') {
+        statusEl.textContent = "DRAW";
+        setTimeout(() => showOverlay('SYSTEM', 'DRAW', 'No winner this round.', () => init(false), false), 400);
+      } else {
+        scores[result.winner]++;
+        scoreXEl.textContent = scores.X;
+        scoreOEl.textContent = scores.O;
+        statusEl.textContent = `PLAYER ${result.winner} WINS`;
+        setTimeout(() => showOverlay('MATCH RESULT', `PLAYER ${result.winner} WINS`, `X ${scores.X} · O ${scores.O}`, () => init(false), true), 400);
+      }
+    } else {
+      current = current === 'X' ? 'O' : 'X';
+      statusEl.textContent = `PLAYER ${current} TURN`;
+      render([], i);
+    }
+  }
+
+  document.getElementById('tttReset').addEventListener('click', () => init(true));
+  init(true);
+})();
+</script>
+
+</body>
+</html>

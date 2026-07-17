@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkers // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>2P</div>
+</div>
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span id="status">RED'S TURN</span>
+      <span>RED <span class="lcd" id="p1Count">12</span> &nbsp;·&nbsp; GREEN <span class="lcd" id="p2Count">12</span></span>
+    </div>
+    <div class="checkers-board" id="board"></div>
+    <button class="btn" id="restart">↺ Reset</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">MATCH RESULT</div>
+    <h2 id="overlayTitle">RED WINS</h2>
+    <p id="overlaySubtitle"></p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const p1CountEl = document.getElementById('p1Count');
+  const p2CountEl = document.getElementById('p2Count');
+  // board[r][c] = null | {player:1|2, king:bool}
+  // player 1 (red) starts top, moves down; player 2 (green) starts bottom, moves up
+  let board, turn, selected, legalMoves;
+
+  function init(){
+    board = Array(8).fill().map(() => Array(8).fill(null));
+    for (let r=0;r<3;r++) for (let c=0;c<8;c++) if ((r+c)%2===1) board[r][c] = {player:1, king:false};
+    for (let r=5;r<8;r++) for (let c=0;c<8;c++) if ((r+c)%2===1) board[r][c] = {player:2, king:false};
+    turn = 1;
+    selected = null;
+    legalMoves = [];
+    updateStatus();
+    render();
+  }
+
+  function updateStatus(){
+    statusEl.textContent = turn===1 ? "RED'S TURN" : "GREEN'S TURN";
+    let c1=0, c2=0;
+    for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+      if (board[r][c]?.player===1) c1++;
+      if (board[r][c]?.player===2) c2++;
+    }
+    p1CountEl.textContent = c1;
+    p2CountEl.textContent = c2;
+    return {c1,c2};
+  }
+
+  function pieceMoves(r,c){
+    const piece = board[r][c];
+    if (!piece) return [];
+    const dirs = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (piece.player===1 ? [[1,-1],[1,1]] : [[-1,-1],[-1,1]]);
+    const moves = [];
+    for (const [dr,dc] of dirs) {
+      const nr=r+dr, nc=c+dc;
+      if (nr>=0&&nr<8&&nc>=0&&nc<8) {
+        if (!board[nr][nc]) moves.push({to:[nr,nc], capture:null});
+        else if (board[nr][nc].player !== piece.player) {
+          const jr=nr+dr, jc=nc+dc;
+          if (jr>=0&&jr<8&&jc>=0&&jc<8&&!board[jr][jc]) moves.push({to:[jr,jc], capture:[nr,nc]});
+        }
+      }
+    }
+    return moves;
+  }
+
+  function allMovesFor(player){
+    let all = [];
+    for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+      if (board[r][c]?.player === player) {
+        pieceMoves(r,c).forEach(m => all.push({from:[r,c], ...m}));
+      }
+    }
+    const captures = all.filter(m => m.capture);
+    return captures.length ? captures : all;
+  }
+
+  function render(){
+    boardEl.innerHTML = '';
+    for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+      const cell = document.createElement('div');
+      cell.className = 'checkers-cell ' + ((r+c)%2===0 ? 'light' : 'dark');
+      if (selected && selected[0]===r && selected[1]===c) cell.classList.add('selected');
+      if (legalMoves.some(m => m.to[0]===r && m.to[1]===c)) cell.classList.add('hint');
+      const piece = board[r][c];
+      if (piece) {
+        const p = document.createElement('div');
+        p.className = 'piece ' + (piece.player===1 ? 'p1' : 'p2');
+        if (piece.king) p.textContent = '♛';
+        cell.appendChild(p);
+      }
+      cell.addEventListener('click', () => handleClick(r,c));
+      boardEl.appendChild(cell);
+    }
+  }
+
+  function handleClick(r,c){
+    const moveHit = legalMoves.find(m => m.to[0]===r && m.to[1]===c);
+    if (selected && moveHit) {
+      const [fr,fc] = selected;
+      board[r][c] = board[fr][fc];
+      board[fr][fc] = null;
+      if (moveHit.capture) board[moveHit.capture[0]][moveHit.capture[1]] = null;
+      if ((board[r][c].player===1 && r===7) || (board[r][c].player===2 && r===0)) board[r][c].king = true;
+
+      // chain capture
+      if (moveHit.capture) {
+        const further = pieceMoves(r,c).filter(m => m.capture);
+        if (further.length) {
+          selected = [r,c];
+          legalMoves = further;
+          render();
+          return;
+        }
+      }
+      selected = null;
+      legalMoves = [];
+      turn = turn === 1 ? 2 : 1;
+      const counts = updateStatus();
+      render();
+      checkGameOver(counts);
+      return;
+    }
+    const piece = board[r][c];
+    if (piece && piece.player === turn) {
+      const moves = pieceMoves(r,c);
+      const forcedAll = allMovesFor(turn);
+      const forcedCapture = forcedAll.some(m => m.capture);
+      const filtered = forcedCapture ? moves.filter(m => m.capture) : moves;
+      selected = [r,c];
+      legalMoves = filtered;
+      render();
+    } else {
+      selected = null;
+      legalMoves = [];
+      render();
+    }
+  }
+
+  function checkGameOver(counts){
+    if (counts.c1 === 0) {
+      showOverlay('MATCH RESULT', 'GREEN WINS', 'Red has no pieces left.', init, true);
+      return;
+    }
+    if (counts.c2 === 0) {
+      showOverlay('MATCH RESULT', 'RED WINS', 'Green has no pieces left.', init, true);
+      return;
+    }
+    if (allMovesFor(turn).length === 0) {
+      const winner = turn === 1 ? 'GREEN' : 'RED';
+      showOverlay('MATCH RESULT', `${winner} WINS`, `${turn===1?'Red':'Green'} has no legal moves.`, init, true);
+    }
+  }
+
+  document.getElementById('restart').addEventListener('click', init);
+  init();
+})();
+</script>
+</body>
+</html>

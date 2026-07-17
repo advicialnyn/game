@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect Four // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>2P</div>
+</div>
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span id="status">PLAYER 1 TURN</span>
+      <span>P1 <span class="lcd" id="p1Score">0</span> &nbsp;·&nbsp; P2 <span class="lcd" id="p2Score">0</span></span>
+    </div>
+    <div class="c4-cols" id="cols"></div>
+    <div class="c4-board" id="board"></div>
+    <button class="btn" id="restart">↺ Reset</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">MATCH RESULT</div>
+    <h2 id="overlayTitle">PLAYER 1 WINS</h2>
+    <p id="overlaySubtitle"></p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const ROWS=6, COLS=7;
+  const boardEl = document.getElementById('board');
+  const colsEl = document.getElementById('cols');
+  const statusEl = document.getElementById('status');
+  const p1El = document.getElementById('p1Score');
+  const p2El = document.getElementById('p2Score');
+  let grid, turn, active, scores = {1:0,2:0};
+
+  function init(fullReset){
+    grid = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+    turn = 1;
+    active = true;
+    if (fullReset) scores = {1:0,2:0};
+    p1El.textContent = scores[1];
+    p2El.textContent = scores[2];
+    statusEl.textContent = 'PLAYER 1 TURN';
+    renderCols();
+    render();
+  }
+
+  function renderCols(){
+    colsEl.innerHTML = '';
+    for (let c=0;c<COLS;c++) {
+      const b = document.createElement('button');
+      b.className = 'c4-col-btn';
+      b.textContent = '▼';
+      b.addEventListener('click', () => drop(c));
+      colsEl.appendChild(b);
+    }
+  }
+
+  function render(){
+    boardEl.innerHTML = '';
+    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+      const cell = document.createElement('div');
+      cell.className = 'c4-cell';
+      if (grid[r][c]===1) cell.classList.add('p1');
+      if (grid[r][c]===2) cell.classList.add('p2');
+      boardEl.appendChild(cell);
+    }
+  }
+
+  function drop(c){
+    if (!active) return;
+    for (let r=ROWS-1;r>=0;r--) {
+      if (!grid[r][c]) {
+        grid[r][c] = turn;
+        render();
+        if (checkWin(r,c)) {
+          active = false;
+          scores[turn]++;
+          p1El.textContent = scores[1];
+          p2El.textContent = scores[2];
+          setTimeout(() => showOverlay('MATCH RESULT', `PLAYER ${turn} WINS`, `P1 ${scores[1]} · P2 ${scores[2]}`, () => init(false), true), 300);
+          return;
+        }
+        if (grid.every(row => row.every(v => v))) {
+          active = false;
+          setTimeout(() => showOverlay('SYSTEM', 'DRAW', 'Board is full.', () => init(false), false), 300);
+          return;
+        }
+        turn = turn === 1 ? 2 : 1;
+        statusEl.textContent = `PLAYER ${turn} TURN`;
+        return;
+      }
+    }
+  }
+
+  function checkWin(r,c){
+    const p = grid[r][c];
+    const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+    for (const [dr,dc] of dirs) {
+      let count = 1;
+      for (let s=1;s<4;s++) { const nr=r+dr*s, nc=c+dc*s; if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&grid[nr][nc]===p) count++; else break; }
+      for (let s=1;s<4;s++) { const nr=r-dr*s, nc=c-dc*s; if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&grid[nr][nc]===p) count++; else break; }
+      if (count >= 4) return true;
+    }
+    return false;
+  }
+
+  document.getElementById('restart').addEventListener('click', () => init(true));
+  init(true);
+})();
+</script>
+</body>
+</html>
