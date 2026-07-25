@@ -16,15 +16,26 @@
 </div>
 
 <div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+<div class="game-title">MEMORY MATCH<span class="sub">1 player · flip pairs</span></div>
 
-<div class="game-panel">
+<div class="diff-select" id="diffSelect">
+  <p>SELECT DIFFICULTY</p>
+  <div class="diff-row">
+    <button class="btn" data-diff="easy">Easy · 3×4</button>
+    <button class="btn" data-diff="medium">Medium · 4×4</button>
+    <button class="btn" data-diff="hard">Hard · 4×6</button>
+  </div>
+</div>
+
+<div class="game-panel" id="gamePanel" style="display:none;">
   <div class="console">
     <div class="info-bar">
       <span>MOVES <span class="lcd" id="memMoves">0</span></span>
-      <span>MATCH <span class="lcd" id="memMatches">0</span>/8</span>
+      <span>MATCH <span class="lcd" id="memMatches">0</span>/<span id="totalPairs">8</span></span>
     </div>
     <div class="mem-board" id="memBoard"></div>
     <button class="btn" id="memReset">↺ New Game</button>
+    <button class="btn" id="changeDiff">⚙ Change Difficulty</button>
   </div>
 </div>
 
@@ -43,11 +54,31 @@
   const boardEl = document.getElementById('memBoard');
   const movesEl = document.getElementById('memMoves');
   const matchesEl = document.getElementById('memMatches');
-  const emojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'];
-  let cards, flipped, matched, moves, lock;
+  const totalPairsEl = document.getElementById('totalPairs');
+  const diffSelectEl = document.getElementById('diffSelect');
+  const gamePanelEl = document.getElementById('gamePanel');
+
+  const allEmojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐸'];
+  const diffs = {
+    easy:   { pairs: 6,  cols: 3 },
+    medium: { pairs: 8,  cols: 4 },
+    hard:   { pairs: 12, cols: 4 }
+  };
+
+  let cards, flipped, matched, moves, lock, currentDiff;
+
+  function startDiff(diff){
+    currentDiff = diff;
+    diffSelectEl.style.display = 'none';
+    gamePanelEl.style.display = 'block';
+    document.querySelector('.mem-board').style.gridTemplateColumns = `repeat(${diffs[diff].cols}, 1fr)`;
+    init();
+  }
 
   function init(){
-    cards = [...emojis, ...emojis]
+    const { pairs } = diffs[currentDiff];
+    const chosen = allEmojis.slice(0, pairs);
+    cards = [...chosen, ...chosen]
       .map(e => ({ emoji: e, id: Math.random() }))
       .sort(() => Math.random() - 0.5);
     flipped = [];
@@ -56,6 +87,7 @@
     lock = false;
     movesEl.textContent = moves;
     matchesEl.textContent = matched;
+    totalPairsEl.textContent = pairs;
     render();
   }
 
@@ -90,8 +122,8 @@
         flipped = [];
         lock = false;
         render();
-        if (matched === emojis.length) {
-          setTimeout(() => showOverlay('COMPLETE', 'ALL MATCHED', `Finished in ${moves} moves.`, init, true), 300);
+        if (matched === diffs[currentDiff].pairs) {
+          setTimeout(() => showOverlay('COMPLETE', 'ALL MATCHED', `${currentDiff.toUpperCase()} · finished in ${moves} moves.`, init, true), 300);
         }
       } else {
         setTimeout(() => {
@@ -106,8 +138,14 @@
     }
   }
 
+  document.querySelectorAll('#diffSelect [data-diff]').forEach(btn => {
+    btn.addEventListener('click', () => startDiff(btn.dataset.diff));
+  });
   document.getElementById('memReset').addEventListener('click', init);
-  init();
+  document.getElementById('changeDiff').addEventListener('click', () => {
+    gamePanelEl.style.display = 'none';
+    diffSelectEl.style.display = 'block';
+  });
 })();
 </script>
 
