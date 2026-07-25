@@ -436,3 +436,31 @@ canvas {
 .dice-box { display:flex; align-items:center; justify-content:center; gap:16px; margin-top:16px; }
 .dice-face { width:56px; height:56px; border:1px solid var(--trace); border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:1.6em; color:var(--green); background:var(--bg-panel); }
 .turn-badge { font-family:var(--font-mono); font-size:0.85em; padding:6px 12px; border-radius:3px; border:1px solid var(--trace); display:inline-block; }
+
+/* ===== Game title heading (shown on every game page) ===== */
+.game-title {
+  max-width: 480px;
+  margin: 2px auto 14px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 1.05em;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.game-title .sub {
+  display: block;
+  font-size: 0.7em;
+  font-weight: 400;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+  text-transform: none;
+}
+
+/* ===== Difficulty selector (memory, etc.) ===== */
+.diff-select { max-width: 480px; margin: 0 auto 16px; text-align:center; }
+.diff-select p { font-family: var(--font-mono); font-size:0.8em; color:var(--text-dim); margin-bottom:10px; }
+.diff-row { display:flex; gap:8px; justify-content:center; }
+.diff-row button.active { color: var(--green); border-color: var(--green-dim); }
