@@ -58,9 +58,19 @@
   const SIZE = 15;
   const BOX = canvas.width / SIZE; // 20px
 
+  // ── DIFFICULTY TUNING ──
+  // Enemies only get to move once every N ticks. Higher number = slower enemies.
+  // 1 = same speed as player (fast/hard). 2 = half speed. 3-4 = noticeably slower (easy).
+  const ENEMY_MOVE_EVERY = 4;
+  // How likely an enemy picks the "toward player" move vs a random valid move (0-1).
+  // Lower = enemies wander more and chase less aggressively.
+  const ENEMY_CHASE_CHANCE = 0.4;
+  // How many ticks enemies stay frozen after each reset (start / respawn after losing a life).
+  const ENEMY_RELEASE_DELAY = 19;
+
   // cell codes: 1 = wall, 0 = dot, 2 = power pellet, 3 = empty (eaten)
   let maze, score, lives, best, running, loop, scaredTimer, dotsLeft;
-  let player, enemies, releaseTimer, enemyStepToggle;
+  let player, enemies, releaseTimer, enemyTickCounter;
 
   best = parseInt(localStorage.getItem('mazeBest') || '0');
   bestEl.textContent = best;
@@ -103,8 +113,8 @@
       { r: 7, c: 8, color: '#4ea8ff', dir:{r:-1,c:0}, home:{r:7,c:8} }
     ];
     scaredTimer = 0;
-    releaseTimer = 14; // enemies stay put briefly after each reset so the player has room to move
-    enemyStepToggle = false;
+    releaseTimer = ENEMY_RELEASE_DELAY;
+    enemyTickCounter = 0;
   }
 
   function init(){
@@ -118,7 +128,7 @@
     running = true;
     draw();
     clearInterval(loop);
-    loop = setInterval(tick, 160);
+    loop = setInterval(tick, 120);
   }
 
   function passable(r,c){
@@ -154,12 +164,12 @@
 
     if (scaredTimer > 0) scaredTimer--;
 
-    // enemies wait briefly after each reset, then move at half the player's speed
+    // enemies wait briefly after each reset, then move once every ENEMY_MOVE_EVERY ticks
     if (releaseTimer > 0) {
       releaseTimer--;
     } else {
-      enemyStepToggle = !enemyStepToggle;
-      if (enemyStepToggle) {
+      enemyTickCounter++;
+      if (enemyTickCounter % ENEMY_MOVE_EVERY === 0) {
         enemies.forEach(e => {
           const dirs = [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}];
           const valid = dirs.filter(d => passable(e.r+d.r, e.c+d.c) && !(d.r===-e.dir.r && d.c===-e.dir.c));
@@ -172,7 +182,7 @@
             const db = Math.hypot((e.r+b.r)-player.r, (e.c+b.c)-player.c);
             return scaredTimer > 0 ? db - da : da - db;
           });
-          const chosen = Math.random() < 0.4 ? options[0] : options[Math.floor(Math.random()*options.length)];
+          const chosen = Math.random() < ENEMY_CHASE_CHANCE ? options[0] : options[Math.floor(Math.random()*options.length)];
           e.dir = chosen;
           const np = wrap(e.r+chosen.r, e.c+chosen.c);
           e.r = np.r; e.c = np.c;
