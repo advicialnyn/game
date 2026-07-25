@@ -60,7 +60,7 @@
 
   // cell codes: 1 = wall, 0 = dot, 2 = power pellet, 3 = empty (eaten)
   let maze, score, lives, best, running, loop, scaredTimer, dotsLeft;
-  let player, enemies;
+  let player, enemies, releaseTimer, enemyStepToggle;
 
   best = parseInt(localStorage.getItem('mazeBest') || '0');
   bestEl.textContent = best;
@@ -103,6 +103,8 @@
       { r: 7, c: 8, color: '#4ea8ff', dir:{r:-1,c:0}, home:{r:7,c:8} }
     ];
     scaredTimer = 0;
+    releaseTimer = 14; // enemies stay put briefly after each reset so the player has room to move
+    enemyStepToggle = false;
   }
 
   function init(){
@@ -152,24 +154,31 @@
 
     if (scaredTimer > 0) scaredTimer--;
 
-    // enemy movement
-    enemies.forEach(e => {
-      const dirs = [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}];
-      const valid = dirs.filter(d => passable(e.r+d.r, e.c+d.c) && !(d.r===-e.dir.r && d.c===-e.dir.c));
-      let options = valid.length ? valid : dirs.filter(d => passable(e.r+d.r, e.c+d.c));
-      if (!options.length) return;
+    // enemies wait briefly after each reset, then move at half the player's speed
+    if (releaseTimer > 0) {
+      releaseTimer--;
+    } else {
+      enemyStepToggle = !enemyStepToggle;
+      if (enemyStepToggle) {
+        enemies.forEach(e => {
+          const dirs = [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}];
+          const valid = dirs.filter(d => passable(e.r+d.r, e.c+d.c) && !(d.r===-e.dir.r && d.c===-e.dir.c));
+          let options = valid.length ? valid : dirs.filter(d => passable(e.r+d.r, e.c+d.c));
+          if (!options.length) return;
 
-      // bias toward (or away from, if scared) the player
-      options.sort((a,b) => {
-        const da = Math.hypot((e.r+a.r)-player.r, (e.c+a.c)-player.c);
-        const db = Math.hypot((e.r+b.r)-player.r, (e.c+b.c)-player.c);
-        return scaredTimer > 0 ? db - da : da - db;
-      });
-      const chosen = Math.random() < 0.65 ? options[0] : options[Math.floor(Math.random()*options.length)];
-      e.dir = chosen;
-      const np = wrap(e.r+chosen.r, e.c+chosen.c);
-      e.r = np.r; e.c = np.c;
-    });
+          // mild bias toward (or away from, if scared) the player — not a hard chase
+          options.sort((a,b) => {
+            const da = Math.hypot((e.r+a.r)-player.r, (e.c+a.c)-player.c);
+            const db = Math.hypot((e.r+b.r)-player.r, (e.c+b.c)-player.c);
+            return scaredTimer > 0 ? db - da : da - db;
+          });
+          const chosen = Math.random() < 0.4 ? options[0] : options[Math.floor(Math.random()*options.length)];
+          e.dir = chosen;
+          const np = wrap(e.r+chosen.r, e.c+chosen.c);
+          e.r = np.r; e.c = np.c;
+        });
+      }
+    }
 
     // collisions
     for (const e of enemies) {
