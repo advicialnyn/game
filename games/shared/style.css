@@ -362,7 +362,7 @@ canvas {
 }
 
 /* ===== 2048 ===== */
-.g2048-board { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; max-width:320px; margin:0 auto; background:#081310; padding:6px; border-radius:6px; border:1px solid var(--trace-dim); }
+.g2048-board { touch-action: none; display:grid; grid-template-columns:repeat(4,1fr); gap:6px; max-width:320px; margin:0 auto; background:#081310; padding:6px; border-radius:6px; border:1px solid var(--trace-dim); }
 .g2048-cell { aspect-ratio:1; background:#0c1613; border-radius:4px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-weight:700; font-size:1.25em; color:var(--text-dim); transition: background 0.12s, color 0.12s, transform 0.1s; }
 .g2048-cell.pop { animation: pop 0.15s ease; }
 
