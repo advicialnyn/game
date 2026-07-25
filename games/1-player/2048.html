@@ -112,7 +112,7 @@
   function move(dir){
     if (over) return;
     let g = grid.map(r=>r.slice());
-    let rotations = {left:0, up:1, right:2, down:3}[dir];
+    let rotations = {left:0, up:3, right:2, down:1}[dir];
     for (let i=0;i<rotations;i++) g = rotate(g);
     const before = JSON.stringify(g);
     g = g.map(slide);
