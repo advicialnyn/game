@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glitch Runner // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  #runnerCanvas { touch-action: none; width: 100%; max-width: 340px; height: auto; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>1P</div>
+</div>
+
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+<div class="game-title">GLITCH RUNNER<span class="sub">1 player · jump the obstacles</span></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span>SCORE <span class="lcd" id="score">0</span></span>
+      <span>BEST <span class="lcd" id="best">0</span></span>
+    </div>
+    <canvas id="runnerCanvas" width="340" height="160"></canvas>
+    <div><button class="btn" id="startBtn">▶ Start</button></div>
+    <p style="font-family:var(--font-mono);font-size:0.7em;color:var(--text-dim);margin-top:10px;">tap the board, press space, or swipe up to jump</p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">SYSTEM</div>
+    <h2 id="overlayTitle">CRASHED</h2>
+    <p id="overlaySubtitle">Score 0</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('runnerCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const GROUND_Y = H - 24;
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+
+  best = parseInt(localStorage.getItem('runnerBest') || '0');
+  bestEl.textContent = best;
+
+  let player, obstacles, speed, score, running, rafId, lastTime, spawnTimer, spawnGap, groundOffset;
+
+  function init(){
+    player = { x: 40, y: GROUND_Y - 22, w: 20, h: 22, vy: 0, jumping: false, duckFrame: 0 };
+    obstacles = [];
+    speed = 3.2;
+    score = 0;
+    running = true;
+    spawnTimer = 0;
+    spawnGap = 70 + Math.random()*40;
+    groundOffset = 0;
+    scoreEl.textContent = 0;
+    lastTime = performance.now();
+    cancelAnimationFrame(rafId);
+    loop(performance.now());
+  }
+
+  function jump(){
+    if (!running) { init(); return; }
+    if (!player.jumping) {
+      player.vy = -8.2;
+      player.jumping = true;
+    }
+  }
+
+  function spawnObstacle(){
+    const tall = Math.random() < 0.5;
+    obstacles.push({
+      x: W + 10,
+      w: tall ? 14 : 22,
+      h: tall ? 30 : 16,
+      color: tall ? '#ff5f5f' : '#ffb020'
+    });
+  }
+
+  function loop(now){
+    const dt = Math.min(now - lastTime, 40);
+    lastTime = now;
+
+    if (running) {
+      // physics
+      player.vy += 0.5;
+      player.y += player.vy * (dt/16);
+      if (player.y > GROUND_Y - player.h) {
+        player.y = GROUND_Y - player.h;
+        player.vy = 0;
+        player.jumping = false;
+      }
+
+      speed = Math.min(7, speed + 0.0008 * dt);
+      groundOffset = (groundOffset + speed) % 20;
+
+      spawnTimer += dt/16;
+      if (spawnTimer > spawnGap/speed) {
+        spawnTimer = 0;
+        spawnGap = 60 + Math.random()*50;
+        spawnObstacle();
+      }
+
+      obstacles.forEach(o => o.x -= speed * (dt/16));
+      obstacles = obstacles.filter(o => o.x > -30);
+
+      score += dt/50;
+      scoreEl.textContent = Math.floor(score);
+
+      // collision (simple AABB against ground-level obstacle box)
+      for (const o of obstacles) {
+        const oy = GROUND_Y - o.h;
+        if (player.x < o.x + o.w && player.x + player.w > o.x &&
+            player.y < oy + o.h && player.y + player.h > oy) {
+          gameOver();
+          break;
+        }
+      }
+    }
+
+    draw();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function gameOver(){
+    running = false;
+    const finalScore = Math.floor(score);
+    if (finalScore > best) { best = finalScore; localStorage.setItem('runnerBest', best); bestEl.textContent = best; }
+    showOverlay('SYSTEM', 'CRASHED', `Score ${finalScore} · Best ${best}`, init, false);
+  }
+
+  function draw(){
+    ctx.fillStyle = '#081310';
+    ctx.fillRect(0,0,W,H);
+
+    // ground line
+    ctx.strokeStyle = '#1f3d34';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    ctx.lineTo(W, GROUND_Y);
+    ctx.stroke();
+    // dashed ground detail scrolling
+    ctx.strokeStyle = 'rgba(61,255,160,0.25)';
+    ctx.setLineDash([8,10]);
+    ctx.lineDashOffset = -groundOffset;
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y+6);
+    ctx.lineTo(W, GROUND_Y+6);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // obstacles
+    obstacles.forEach(o => {
+      const oy = GROUND_Y - o.h;
+      ctx.fillStyle = o.color;
+      ctx.shadowColor = o.color; ctx.shadowBlur = 6;
+      ctx.fillRect(o.x, oy, o.w, o.h);
+      ctx.shadowBlur = 0;
+    });
+
+    // player
+    ctx.fillStyle = '#3dffa0';
+    ctx.shadowColor = '#3dffa0'; ctx.shadowBlur = 8;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.shadowBlur = 0;
+
+    if (!running && score === 0) {
+      ctx.fillStyle = 'rgba(211,236,225,0.5)';
+      ctx.font = '11px JetBrains Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText('TAP OR PRESS SPACE TO JUMP', W/2, H/2);
+    }
+  }
+
+  document.getElementById('startBtn').addEventListener('click', init);
+  canvas.addEventListener('click', jump);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); }, {passive:false});
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.key === 'ArrowUp') { e.preventDefault(); jump(); }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) running = false;
+  });
+
+  player = { x: 40, y: GROUND_Y-22, w:20, h:22, vy:0, jumping:false };
+  obstacles = [];
+  score = 0;
+  running = false;
+  groundOffset = 0;
+  draw();
+})();
+</script>
+
+</body>
+  </html>
+  
