@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Cascade // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  .cascade-wrap { display:flex; gap:10px; justify-content:center; align-items:flex-start; }
+  #cascadeCanvas { touch-action:none; }
+  .side-panel { display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .next-box { width:64px; height:64px; background:#081310; border:1px solid var(--trace-dim); border-radius:4px; }
+  .side-label { font-family:var(--font-mono); font-size:0.62em; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.05em; }
+  .cascade-controls { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; max-width:320px; margin:14px auto 0; }
+  .cascade-controls button { background:var(--bg-panel); border:1px solid var(--trace); color:var(--text-dim); font-size:1.1em; border-radius:4px; padding:12px 0; font-family:var(--font-mono); }
+  .cascade-controls button:active { color:var(--green); border-color:var(--green-dim); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>1P</div>
+</div>
+
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+<div class="game-title">BLOCK CASCADE<span class="sub">1 player · clear the lines</span></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span>SCORE <span class="lcd" id="score">0</span></span>
+      <span>LINES <span class="lcd" id="lines">0</span></span>
+      <span>BEST <span class="lcd" id="best">0</span></span>
+    </div>
+    <div class="cascade-wrap">
+      <canvas id="cascadeCanvas" width="200" height="400"></canvas>
+      <div class="side-panel">
+        <div class="side-label">NEXT</div>
+        <canvas id="nextCanvas" width="64" height="64" class="next-box"></canvas>
+      </div>
+    </div>
+    <div><button class="btn" id="startBtn">▶ Start</button></div>
+    <div class="cascade-controls">
+      <button id="leftBtn">◀</button>
+      <button id="rotateBtn">↻</button>
+      <button id="rightBtn">▶</button>
+      <button id="dropBtn">⤓</button>
+    </div>
+    <p style="font-family:var(--font-mono);font-size:0.68em;color:var(--text-dim);margin-top:10px;">swipe left/right to move, swipe down to drop, tap board to rotate</p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">SYSTEM</div>
+    <h2 id="overlayTitle">STACK TOPPED OUT</h2>
+    <p id="overlaySubtitle">Score 0</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('cascadeCanvas');
+  const ctx = canvas.getContext('2d');
+  const nextCanvas = document.getElementById('nextCanvas');
+  const nctx = nextCanvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const linesEl = document.getElementById('lines');
+  const bestEl = document.getElementById('best');
+
+  const COLS = 10, ROWS = 20, BOX = 20;
+  let grid, current, next, score, lines, best, running, dropTimer, dropInterval, gameLoopId;
+
+  best = parseInt(localStorage.getItem('cascadeBest') || '0');
+  bestEl.textContent = best;
+
+  // original color palette (not matching any specific existing game's scheme)
+  const SHAPES = {
+    I: { cells: [[0,1],[1,1],[2,1],[3,1]], color: '#3dffa0' },
+    O: { cells: [[1,0],[2,0],[1,1],[2,1]], color: '#ffe66d' },
+    T: { cells: [[1,0],[0,1],[1,1],[2,1]], color: '#4ea8ff' },
+    S: { cells: [[1,0],[2,0],[0,1],[1,1]], color: '#ff5f5f' },
+    Z: { cells: [[0,0],[1,0],[1,1],[2,1]], color: '#ffb020' },
+    J: { cells: [[0,0],[0,1],[1,1],[2,1]], color: '#a29bfe' },
+    L: { cells: [[2,0],[0,1],[1,1],[2,1]], color: '#95e1d3' }
+  };
+  const KEYS = Object.keys(SHAPES);
+
+  function randomPiece(){
+    const key = KEYS[Math.floor(Math.random()*KEYS.length)];
+    return { key, cells: SHAPES[key].cells.map(c=>c.slice()), color: SHAPES[key].color, x: 3, y: -1 };
+  }
+
+  function init(){
+    grid = Array(ROWS).fill().map(()=>Array(COLS).fill(null));
+    current = randomPiece();
+    next = randomPiece();
+    score = 0;
+    lines = 0;
+    dropInterval = 600;
+    scoreEl.textContent = 0;
+    linesEl.textContent = 0;
+    running = true;
+    clearInterval(dropTimer);
+    dropTimer = setInterval(() => step(), dropInterval);
+    draw();
+    drawNext();
+  }
+
+  function cellsAbs(piece){
+    return piece.cells.map(([cx,cy]) => [piece.x+cx, piece.y+cy]);
+  }
+
+  function collides(piece, dx, dy, cells){
+    const testCells = cells || piece.cells;
+    for (const [cx,cy] of testCells) {
+      const x = piece.x+cx+dx, y = piece.y+cy+dy;
+      if (x<0 || x>=COLS || y>=ROWS) return true;
+      if (y>=0 && grid[y][x]) return true;
+    }
+    return false;
+  }
+
+  function lockPiece(){
+    for (const [x,y] of cellsAbs(current)) {
+      if (y<0) { gameOver(); return; }
+      grid[y][x] = current.color;
+    }
+    clearLines();
+    current = next;
+    next = randomPiece();
+    drawNext();
+    if (collides(current, 0, 0)) gameOver();
+  }
+
+  function clearLines(){
+    let cleared = 0;
+    for (let r=ROWS-1;r>=0;r--) {
+      if (grid[r].every(c => c)) {
+        grid.splice(r,1);
+        grid.unshift(Array(COLS).fill(null));
+        cleared++;
+        r++;
+      }
+    }
+    if (cleared) {
+      const points = [0,100,300,500,800][cleared] || 1000;
+      score += points;
+      lines += cleared;
+      scoreEl.textContent = score;
+      linesEl.textContent = lines;
+      // speed up slightly every 5 lines
+      if (lines % 5 === 0) {
+        dropInterval = Math.max(150, dropInterval - 40);
+        clearInterval(dropTimer);
+        dropTimer = setInterval(() => step(), dropInterval);
+      }
+    }
+  }
+
+  function step(){
+    if (!running) return;
+    if (!collides(current, 0, 1)) {
+      current.y++;
+    } else {
+      lockPiece();
+    }
+    draw();
+  }
+
+  function move(dx){
+    if (!running) return;
+    if (!collides(current, dx, 0)) { current.x += dx; draw(); }
+  }
+
+  function rotate(){
+    if (!running) return;
+    if (current.key === 'O') return;
+    const rotated = current.cells.map(([x,y]) => [ -y+3, x ]); // rotate around a 4x4 box
+    // normalize so it doesn't drift off the left
+    const minX = Math.min(...rotated.map(c=>c[0]));
+    const norm = rotated.map(([x,y]) => [x-Math.min(0,minX), y]);
+    if (!collides(current, 0, 0, norm)) {
+      current.cells = norm;
+      draw();
+    }
+  }
+
+  function hardDrop(){
+    if (!running) return;
+    while (!collides(current, 0, 1)) current.y++;
+    lockPiece();
+    draw();
+  }
+
+  function gameOver(){
+    running = false;
+    clearInterval(dropTimer);
+    if (score > best) { best = score; localStorage.setItem('cascadeBest', best); bestEl.textContent = best; }
+    showOverlay('SYSTEM', 'STACK TOPPED OUT', `Score ${score} · Lines ${lines} · Best ${best}`, init, false);
+  }
+
+  function draw(){
+    ctx.fillStyle = '#081310';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // settled blocks
+    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+      if (grid[r][c]) {
+        ctx.fillStyle = grid[r][c];
+        ctx.fillRect(c*BOX, r*BOX, BOX-1, BOX-1);
+      }
+    }
+    // grid lines (subtle)
+    ctx.strokeStyle = 'rgba(31,61,52,0.4)';
+    for (let c=0;c<=COLS;c++) { ctx.beginPath(); ctx.moveTo(c*BOX,0); ctx.lineTo(c*BOX,canvas.height); ctx.stroke(); }
+    for (let r=0;r<=ROWS;r++) { ctx.beginPath(); ctx.moveTo(0,r*BOX); ctx.lineTo(canvas.width,r*BOX); ctx.stroke(); }
+
+    // current piece
+    ctx.fillStyle = current.color;
+    ctx.shadowColor = current.color; ctx.shadowBlur = 5;
+    for (const [x,y] of cellsAbs(current)) {
+      if (y>=0) ctx.fillRect(x*BOX, y*BOX, BOX-1, BOX-1);
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  function drawNext(){
+    nctx.fillStyle = '#081310';
+    nctx.fillRect(0,0,64,64);
+    nctx.fillStyle = next.color;
+    const box = 14;
+    const offX = next.key==='I' ? 4 : 12;
+    for (const [cx,cy] of next.cells) {
+      nctx.fillRect(offX + cx*box, 8 + cy*box, box-1, box-1);
+    }
+  }
+
+  document.getElementById('startBtn').addEventListener('click', init);
+  document.getElementById('leftBtn').addEventListener('click', () => move(-1));
+  document.getElementById('rightBtn').addEventListener('click', () => move(1));
+  document.getElementById('rotateBtn').addEventListener('click', rotate);
+  document.getElementById('dropBtn').addEventListener('click', hardDrop);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key==='ArrowLeft') move(-1);
+    if (e.key==='ArrowRight') move(1);
+    if (e.key==='ArrowUp') rotate();
+    if (e.key==='ArrowDown') hardDrop();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { running = false; clearInterval(dropTimer); }
+  });
+
+  let sx=0, sy=0, moved=false;
+  canvas.addEventListener('touchstart', e => { sx=e.touches[0].clientX; sy=e.touches[0].clientY; moved=false; }, {passive:true});
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); moved=true; }, {passive:false});
+  canvas.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) { rotate(); return; }
+    if (Math.abs(dx) > Math.abs(dy)) move(dx>0?1:-1);
+    else if (dy>0) hardDrop();
+  });
+
+  init();
+  running = false;
+  clearInterval(dropTimer);
+  draw();
+  drawNext();
+})();
+</script>
+
+</body>
+</html>
