@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glow Flap // GAME_ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  #flapCanvas { touch-action: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a class="brand" href="../index.html">GAME_ZONE<span class="dim">.arcade</span></a>
+  <div class="status"><span class="led"></span>1P</div>
+</div>
+
+<div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
+<div class="game-title">GLOW FLAP<span class="sub">1 player · tap to flap through the gaps</span></div>
+
+<div class="game-panel">
+  <div class="console">
+    <div class="info-bar">
+      <span>SCORE <span class="lcd" id="score">0</span></span>
+      <span>BEST <span class="lcd" id="best">0</span></span>
+    </div>
+    <canvas id="flapCanvas" width="280" height="420"></canvas>
+    <div><button class="btn" id="startBtn">▶ Start</button></div>
+    <p style="font-family:var(--font-mono);font-size:0.7em;color:var(--text-dim);margin-top:10px;">tap the board or press space to flap</p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="tag" id="overlayTag">SYSTEM</div>
+    <h2 id="overlayTitle">CRASHED</h2>
+    <p id="overlaySubtitle">Score 0</p>
+    <button class="btn" id="overlayBtn">Continue</button>
+  </div>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('flapCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+
+  best = parseInt(localStorage.getItem('flapBest') || '0');
+  bestEl.textContent = best;
+
+  const GRAVITY = 0.42;
+  const FLAP_VY = -7.2;
+  const GAP = 130;
+  const PIPE_W = 46;
+  const PIPE_SPACING = 190;
+
+  let bird, pipes, score, running, rafId, lastTime, spawnDist;
+
+  function init(){
+    bird = { x: 60, y: H/2, vy: 0, r: 11 };
+    pipes = [];
+    score = 0;
+    running = true;
+    scoreEl.textContent = 0;
+    spawnDist = 0;
+    lastTime = performance.now();
+    spawnPipe(W + 40);
+    cancelAnimationFrame(rafId);
+    loop(performance.now());
+  }
+
+  function spawnPipe(x){
+    const margin = 50;
+    const gapY = margin + Math.random()*(H - margin*2 - GAP);
+    pipes.push({ x, gapY, passed:false });
+  }
+
+  function flap(){
+    if (!running) { init(); return; }
+    bird.vy = FLAP_VY;
+  }
+
+  function loop(now){
+    const dt = Math.min(now - lastTime, 32);
+    lastTime = now;
+
+    if (running) {
+      bird.vy += GRAVITY * (dt/16);
+      bird.y += bird.vy * (dt/16);
+
+      const speed = 2.4 * (dt/16);
+      pipes.forEach(p => p.x -= speed);
+      pipes = pipes.filter(p => p.x > -PIPE_W - 10);
+
+      if (pipes.length === 0 || pipes[pipes.length-1].x < W - PIPE_SPACING) {
+        spawnPipe(W + 10);
+      }
+
+      pipes.forEach(p => {
+        if (!p.passed && p.x + PIPE_W < bird.x) {
+          p.passed = true;
+          score++;
+          scoreEl.textContent = score;
+        }
+      });
+
+      // collisions
+      if (bird.y - bird.r < 0 || bird.y + bird.r > H) {
+        gameOver();
+      }
+      for (const p of pipes) {
+        const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W;
+        if (inX) {
+          const inGap = bird.y - bird.r > p.gapY && bird.y + bird.r < p.gapY + GAP;
+          if (!inGap) { gameOver(); break; }
+        }
+      }
+    }
+
+    draw();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function gameOver(){
+    if (!running) return;
+    running = false;
+    if (score > best) { best = score; localStorage.setItem('flapBest', best); bestEl.textContent = best; }
+    showOverlay('SYSTEM', 'CRASHED', `Score ${score} · Best ${best}`, init, score > 0 && score >= best);
+  }
+
+  function draw(){
+    ctx.fillStyle = '#081310';
+    ctx.fillRect(0,0,W,H);
+
+    pipes.forEach(p => {
+      ctx.fillStyle = '#1f8a5c';
+      ctx.shadowColor = '#3dffa0'; ctx.shadowBlur = 4;
+      ctx.fillRect(p.x, 0, PIPE_W, p.gapY);
+      ctx.fillRect(p.x, p.gapY + GAP, PIPE_W, H - (p.gapY+GAP));
+      ctx.shadowBlur = 0;
+      // lip detail
+      ctx.fillStyle = '#3dffa0';
+      ctx.fillRect(p.x-3, p.gapY-10, PIPE_W+6, 10);
+      ctx.fillRect(p.x-3, p.gapY+GAP, PIPE_W+6, 10);
+    });
+
+    // bird
+    ctx.save();
+    ctx.translate(bird.x, bird.y);
+    const angle = Math.max(-0.5, Math.min(0.9, bird.vy * 0.08));
+    ctx.rotate(angle);
+    ctx.fillStyle = '#ffe66d';
+    ctx.shadowColor = '#ffe66d'; ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(0, 0, bird.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // little wing/eye detail
+    ctx.fillStyle = '#081310';
+    ctx.beginPath();
+    ctx.arc(4, -3, 2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    if (!running && score === 0) {
+      ctx.fillStyle = 'rgba(211,236,225,0.5)';
+      ctx.font = '11px JetBrains Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText('TAP TO FLAP', W/2, H/2);
+    }
+  }
+
+  document.getElementById('startBtn').addEventListener('click', init);
+  canvas.addEventListener('click', flap);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); flap(); }, {passive:false});
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); flap(); }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) running = false;
+  });
+
+  bird = { x:60, y:H/2, vy:0, r:11 };
+  pipes = [];
+  score = 0;
+  running = false;
+  draw();
+})();
+</script>
+
+</body>
+</html>
