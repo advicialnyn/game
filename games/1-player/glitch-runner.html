@@ -21,7 +21,7 @@
 <div class="back-wrap"><a class="back-link" href="../index.html">← back to menu</a></div>
 <div class="game-title">GLITCH RUNNER<span class="sub">1 player · jump the obstacles</span></div>
 
-<div class="game-panel">
+<div class="game-panel" id="gamePanel">
   <div class="console">
     <div class="info-bar">
       <span>SCORE <span class="lcd" id="score">0</span></span>
@@ -55,16 +55,16 @@
   best = parseInt(localStorage.getItem('runnerBest') || '0');
   bestEl.textContent = best;
 
-  let player, obstacles, speed, score, running, rafId, lastTime, spawnTimer, spawnGap, groundOffset;
+  let player, obstacles, speed, score, running, rafId, lastTime, distanceSinceSpawn, nextGap, groundOffset;
 
   function init(){
     player = { x: 40, y: GROUND_Y - 22, w: 20, h: 22, vy: 0, jumping: false, duckFrame: 0 };
     obstacles = [];
-    speed = 3.2;
+    speed = 2.6;
     score = 0;
     running = true;
-    spawnTimer = 0;
-    spawnGap = 70 + Math.random()*40;
+    distanceSinceSpawn = 999; // force an immediate first spawn
+    nextGap = 190 + Math.random()*70;
     groundOffset = 0;
     scoreEl.textContent = 0;
     lastTime = performance.now();
@@ -104,17 +104,18 @@
         player.jumping = false;
       }
 
-      speed = Math.min(7, speed + 0.0008 * dt);
+      speed = Math.min(5.5, speed + 0.00015 * dt);
       groundOffset = (groundOffset + speed) % 20;
 
-      spawnTimer += dt/16;
-      if (spawnTimer > spawnGap/speed) {
-        spawnTimer = 0;
-        spawnGap = 60 + Math.random()*50;
+      const moveAmt = speed * (dt/16);
+      distanceSinceSpawn += moveAmt;
+      if (distanceSinceSpawn > nextGap) {
+        distanceSinceSpawn = 0;
+        nextGap = 170 + speed*16 + Math.random()*70;
         spawnObstacle();
       }
 
-      obstacles.forEach(o => o.x -= speed * (dt/16));
+      obstacles.forEach(o => o.x -= moveAmt);
       obstacles = obstacles.filter(o => o.x > -30);
 
       score += dt/50;
@@ -187,8 +188,20 @@
   }
 
   document.getElementById('startBtn').addEventListener('click', init);
-  canvas.addEventListener('click', jump);
-  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); }, {passive:false});
+
+  const gamePanelEl = document.getElementById('gamePanel');
+  function panelTapHandler(e){
+    if (e.target.closest('#startBtn')) return;
+    if (overlay.classList.contains('show')) return;
+    jump();
+  }
+  gamePanelEl.addEventListener('click', panelTapHandler);
+  gamePanelEl.addEventListener('touchstart', (e) => {
+    if (e.target.closest('#startBtn')) return;
+    if (overlay.classList.contains('show')) return;
+    e.preventDefault();
+    jump();
+  }, {passive:false});
 
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.key === 'ArrowUp') { e.preventDefault(); jump(); }
@@ -208,5 +221,4 @@
 </script>
 
 </body>
-  </html>
-  
+</html>
